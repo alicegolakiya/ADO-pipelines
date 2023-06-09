@@ -3,7 +3,7 @@ resources:
     - repository: templates
       type: github
       name: BMO-Prod/template_repo # name of the GitHub repository
-      endpoint: GitHub
+#      endpoint: GitHub
 #      ref: refs/tags/v1.1.0
 stages:
 - template: apic_dev.yaml
