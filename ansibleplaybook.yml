@@ -1,0 +1,153 @@
+---
+
+- name: Set package variable
+  hosts: build_host
+  gather_facts: false
+  roles:
+  - { role: prerequisite }
+
+# This playbook deploys api to api gateway
+- name: Git checkout
+  hosts: build_host
+  vars:
+    repo_folder : "{{ destdir }}/{{service_no}}/{{apic_env}}/{{dest_techunit}}/{{tstamp.stdout}}"
+    git_repo: bitbucket.bmogc.net/scm/apicpub/{{dest_techunit}}.git
+    sub_log: subscription.log
+    publish_log: publish_log.sql
+
+  tasks:
+    - name: Download code from the GitRepo - "{{git_repo}}"
+      git:
+        repo: "https://{{gituser|urlencode()}}:{{gitpass|urlencode()}}@{{git_repo}}"
+        dest: "{{ repo_folder }}"
+        version: "{{ repo_branch }}"
+      register: git_checkout_log
+
+    - name: "Set git_branch_commit_id = {{ git_checkout_log.after }}"
+      set_fact:
+        git_branch_commit_id: "{{ git_checkout_log.after }}"
+        git_zip_commit_id: "{{ git_commit_id if git_commit_id != ''  else git_checkout_log.after}}"
+
+    - name: "Set fact: zip_file_name, zip_file, git_zip_commit_id = {{git_zip_commit_id}}"
+      set_fact:
+        zip_file_name: "{{dest_techunit}}-{{tstamp.stdout}}-{{git_zip_commit_id}}.zip"
+        zip_file: "{{ destdir }}/{{service_no}}/{{apic_env}}/{{dest_techunit}}/{{dest_techunit}}-{{tstamp.stdout}}-{{git_zip_commit_id}}.zip"
+
+    - name: "git checkout {{ git_commit_id }}"
+      shell: "git checkout {{ git_commit_id }}"
+      args:
+        chdir: "{{ repo_folder }}"
+      register: git_commit_id_out
+      ignore_errors: false
+      when:
+        - git_commit_id != ""
+
+    - name: "git log --name-status -3"
+      shell: "git log --name-status -3"
+      args:
+        chdir: "{{ repo_folder }}"
+      register: git_commit_log
+      ignore_errors: true
+
+    - name: Compress build directory to .zip
+      archive:
+        path: "{{ repo_folder }}"
+        dest: "{{ zip_file }}"
+        format: zip
+
+    - name: Save repo file to artifactory -
+      shell: curl -u"{{gituser|urlencode()}}:{{ artifactory_token }}" -X PUT "{{artifactory_url2}}/{{domain_release}}/{{service_no}}/{{apic_env}}/{{dest_techunit}}/{{zip_file_name}}" -T "{{ zip_file }}"
+      args:
+        warn: false # set warn=false to prevent warning
+      register: upload_artifactory_result
+      ignore_errors: false
+
+    - name: config_file = "{{ repo_folder }}/config.{{apic_env}}.json"
+      set_fact:
+        config_file: "{{ repo_folder }}/config.{{apic_env}}.json"
+
+    - name: set adhoc_deploy = blank
+      set_fact:
+        adhoc_deploy: ""
+      when:
+        - adhoc_deploy is not defined
+
+    - name: replace config_file if adhoc_deploy is set other than None - "{{adhoc_deploy}}"
+      set_fact:
+        config_file: "{{ repo_folder }}/build_config/{{adhoc_deploy}}/config.{{apic_env}}.json"
+      when:
+        - adhoc_deploy != "None"
+        - adhoc_deploy != ""
+
+    - name: cat "{{ config_file }}"
+      shell: cat "{{ config_file }}"
+      register: result
+
+    - name: save the Json data to a jsondata variable as a Fact
+      set_fact:
+        jsondata: "{{ result.stdout | from_json }}"
+
+    - name: Sanity check
+      debug:
+        msg: echo "{{ jsondata }}"
+      when:
+        - debug_app == "debug"
+
+    - name: set porgs
+      set_fact:
+        porgs: "{{ jsondata | json_query(jmesquery) }}"
+      vars:
+        jmesquery: 'porgs'
+
+    - name: apic login before publishing apis
+      import_role:
+        name: apic-login
+
+    - name: Build one pOrg one by one by calling apic-porg2
+      include_role:
+        name: apic-porg2
+      vars:
+        pOrg: "{{ current_porg.name }}"
+      loop: "{{ porgs }}"
+      loop_control:
+        loop_var: current_porg
+
+    - name: Specifying a destination path
+      fetch:
+        src: "{{ repo_folder }}/{{publish_log}}"
+        dest: "/tmp/{{ repo_folder }}/{{publish_log}}"
+        flat: yes
+
+    - name: Specifying a destination path
+      fetch:
+        src: "{{ repo_folder }}/{{sub_log}}"
+        dest: "/tmp/{{ repo_folder }}/{{sub_log}}"
+        flat: yes
+
+    - name: Send Emails to users
+      mail:
+        host: smtp.bmogc.net
+        port: 25
+        subject: "APIC build Report - {{service_no}}"
+        body: "APIC build env={{apic_env}}\ndest_techunit={{dest_techunit}}\nrepo_branch={{repo_branch}}\ngit_branch_commit_id={{git_branch_commit_id}}\ngit_commit_id={{git_commit_id}}\nOn Demand Build User={{adhoc_deploy}}\nfile={{config_file}}\n\nPackage={{artifactory_url2}}/{{domain_release}}/{{service_no}}/{{apic_env}}/{{dest_techunit}}/{{zip_file_name}}\n\n{{git_commit_log.stdout}}"
+        from: "{{ from_notification_email }}"
+        to: "{{ to_notification_email }}"
+        attach:
+        - "/tmp/{{ repo_folder }}/{{publish_log}}"
+        - "/tmp/{{ repo_folder }}/{{sub_log}}"
+        charset: utf-8
+      delegate_to: localhost
+
+    - name: check directory exists
+      stat:
+        path: "/tmp/{{ repo_folder }}"
+      register: dir_to_delete
+      delegate_to: localhost
+
+    # delete directory if condition is true
+    - name: purge "/tmp/{{ repo_folder }}"
+      file:
+        state: absent
+        path: "/tmp/{{ repo_folder }}"
+      when: dir_to_delete.stat.exists and dir_to_delete.stat.isdir
+      delegate_to: localhost
