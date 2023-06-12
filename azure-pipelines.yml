@@ -4,17 +4,7 @@ resources:
       type: github
       name: BMO-Prod/template_repo # name of the GitHub repository
       endpoint: GitHub
-#      ref: refs/tags/v1.1.0
-stages:
-- template: apic_dev.yaml
-  parameters:
-    agentPoolName: 'Prod'
-    agentOS: 'Linux'
-    defaultvarilables:
-      __default__:
-        anisbleUsername: 'sa_apicpubapp_dev'
-        anisblePassword: '<Password here>'
-        anisbleInventory: 'buildhost'
-        anisbleJobTemplate: 
-        anisbleApiHost: anisble.bmogc.net
-
+      ref: refs/tags/v1.1.0
+steps:
+- script: ansible-playbook ansible-playbook.yaml
+  displayName: 'Run Ansible Playbook'
