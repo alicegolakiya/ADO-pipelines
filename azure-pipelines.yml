@@ -4,7 +4,7 @@ resources:
       type: github
       name: BMO-Prod/template_repo # name of the GitHub repository
       endpoint: GitHub
-      ref: refs/tags/v1.1.0
+      ref: 900dddd9d45b6c480e6ee43e5dbd520dd686e2e3
 steps:
 - script: ansible-playbook ansible-playbook.yaml
   displayName: 'Run Ansible Playbook'
