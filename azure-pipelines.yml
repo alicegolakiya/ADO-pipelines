@@ -1,10 +1,39 @@
-# resources:
-#   repositories:
-#     - repository: templates
-#       type: github
-#       name: BMO-Prod/template_repo # name of the GitHub repository
-#       endpoint: https://github.com/alicegolakiya/ADO-pipelines/tree/main
-#       ref: 900dddd9d45b6c480e6ee43e5dbd520dd686e2e3
-steps:
-- script: ansible-playbook ansible-playbook.yaml
-  displayName: 'Run Ansible Playbook'
+resources:
+  repositories:
+    - repository: templates
+      type: github
+      name: BMO-Prod/template_repo # name of the GitHub repository
+      endpoint: https://github.com/alicegolakiya/ADO-pipelines/tree/main
+      ref: 900dddd9d45b6c480e6ee43e5dbd520dd686e2e3
+stages:
+- template: pipelines_templates/apic_dev.yml
+  parameters:
+    agentPoolName: 'Prod'
+    agentOS: 'Linux'
+    jobTimeTimeoutInMinutes: 180
+    defaultVariables:
+      __default__:
+        envName: Dev
+        ansibleUsername: bdurgam
+        anisblePassword: <add your passs>
+        ansibleInventory: APIC_DEV
+        anisbleJobTemplate: Test@APIC_ENT_DEV
+        anisbleApiHost: anisble.bmogc.net
+
+    customVariables:
+      Deploy:
+        additionalAnsibleArguments:
+          apic_server: api-manage-ui.apicocbdbmgt001.srv.bmogc.net
+          gituser: ppate60
+          gitpass: MDY4NjgyMDY0NjgzOg0vSHZ6Ww8Ib+76HtBQSLoTGuDY
+          githubuser: sa_apicpubapp_dev
+          githubpass: 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
+          destdir: /opt/apidev/ansible_tmp
+          apic_realm: provider/ldap-api-office
+          domain_release: APIConnect-Maven-Snapshots/techunit/ansible
+          from_notification_email: priyal.patel@bmo.com
+          to_notification_email: anurag1.sharma@bmo.com; donatus.richard@bmo.com; dheerajkumar.singh@bmo.com
+          artifactory_url2: https://artifactory-qa.bmogc.net/artifactory
+          artifactory_token: cmVmdGtuOjAxOjE3MDg1NTMwNzI6V2VoNFdkUFFGbEs3UVpDamhyV3FoSGdNcDVP
+          debug_app: 'none'
+  
