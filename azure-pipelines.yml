@@ -6,7 +6,7 @@ resources:
       endpoint: dev.azure.com/alicegolakiya/TestFor_AZ_DevOps
       ref: 900dddd9d45b6c480e6ee43e5dbd520dd686e2e3
 stages:
-- template: pipelines_templates/apic_dev.yml
+- template: ansibleplaybook.yml
   parameters:
     agentPoolName: 'Prod'
     agentOS: 'Linux'
